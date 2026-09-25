@@ -157,3 +157,42 @@ def test_app_builtin_decorator(tmp_path, workdir):
     assert h.run('hello bob')[1] == 'hello bob\n'
     assert 'Say hello' in h.run('help hello')[1]
     assert 'hello [name]' in h.run('hello --help')[1]
+
+
+def test_launch_option_and_setup_state(tmp_path, workdir, capsys):
+    app = make_app(tmp_path, setup=lambda rt: {'db': rt.options.db})
+    app.launch_option('--db', default='default.db')
+
+    @app.builtin('whichdb')
+    def whichdb(rt, argv):
+        print(rt.state['db'])
+
+    assert app.run(['--db', 'x.db', 'whichdb']) == 0
+    assert capsys.readouterr().out == 'x.db\n'
+    assert Harness(app).rt.state == {'db': 'default.db'}
+
+
+def test_launch_options_stop_at_the_command(tmp_path, workdir, capsys):
+    app = make_app(tmp_path)
+    assert app.run(['-d', 'case', 'show', 'C1', '--verbose']) == 0
+    assert "case='C1'" in capsys.readouterr().out
+
+
+def test_unknown_launch_option(tmp_path, workdir, capsys):
+    assert make_app(tmp_path).run(['--nope']) == 2
+    assert 'unrecognized' in capsys.readouterr().err
+
+
+def test_command_error_reports_without_traceback(tmp_path, workdir):
+    from shellkit import CommandError
+    app = make_app(tmp_path)
+
+    @app.builtin('refuse')
+    def refuse(rt, argv):
+        raise CommandError('pass a key or --all')
+
+    h = Harness(app)
+    h.run('set debug on')
+    status, _, err = h.run('refuse')
+    assert status == 2
+    assert 'Error: pass a key or --all' in err and 'Traceback' not in err
