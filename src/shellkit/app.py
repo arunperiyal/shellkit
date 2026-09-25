@@ -50,6 +50,10 @@ class App:
         parser_class: ArgumentParser subclass for the top-level parser
         file_style: callable(Path) -> rich style or None, colouring names in
                     ls and tree (e.g. data files magenta)
+        setup: callable(runtime) -> state, run once when the runtime is
+               created (shell or one-shot); the result is `rt.state`. Where
+               an app opens its database or builds its managers, reading
+               launch options from `rt.options`.
     """
 
     def __init__(self, name: str, *, version: Optional[str] = None,
@@ -63,7 +67,8 @@ class App:
                  session_timeout: Optional[int] = None,
                  oneshot: bool = True,
                  parser_class=ShellkitParser,
-                 file_style: Optional[Callable[[Path], Optional[str]]] = None):
+                 file_style: Optional[Callable[[Path], Optional[str]]] = None,
+                 setup: Optional[Callable] = None):
         self.name = name
         self.version = version
         self.description = description
@@ -79,6 +84,8 @@ class App:
         self.oneshot = oneshot
         self.parser_class = parser_class
         self.file_style = file_style
+        self.setup = setup
+        self._launch_options: List[tuple] = []
 
         self.settings: List[Setting] = [
             Setting('echo_context', True, parse_bool,
@@ -134,6 +141,14 @@ class App:
     def add_setting(self, setting: Setting) -> None:
         self.settings.append(setting)
 
+    def launch_option(self, *flags, **kwargs) -> None:
+        """
+        An option given before the command (or before starting the shell),
+        as for add_argument: `app.launch_option('--db', default='refs.db')`.
+        The parsed values are `rt.options`.
+        """
+        self._launch_options.append((flags, kwargs))
+
     # -- lookup ---------------------------------------------------------------------
 
     def builtin_table(self) -> Dict[str, Builtin]:
@@ -185,41 +200,58 @@ class App:
 
     # -- running ----------------------------------------------------------------------
 
+    def launch_parser(self) -> argparse.ArgumentParser:
+        """Parser for what comes before the command: shellkit's flags plus the app's."""
+        parser = ShellkitParser(prog=self.name, add_help=False)
+        parser.add_argument('-d', '--debug', action='store_true', help='Show tracebacks')
+        parser.add_argument('-V', '--version', action='store_true', help='Show the version')
+        parser.add_argument('-h', '--help', action='store_true', help='Show the commands')
+        for flags, kwargs in self._launch_options:
+            parser.add_argument(*flags, **kwargs)
+        parser.add_argument('command', nargs=argparse.REMAINDER)
+        return parser
+
+    def default_options(self) -> argparse.Namespace:
+        """Launch options as if none were given (for a Runtime built directly)."""
+        return self.launch_parser().parse_args([])
+
     def run(self, argv: Optional[List[str]] = None) -> int:
         """
         Entry point.
 
-        Launch flags, before any command: --version, -h/--help, -d/--debug.
+        Launch options come before any command: -V/--version, -h/--help,
+        -d/--debug, and the app's own (launch_option()).
 
         Returns:
             Exit status
         """
+        from shellkit.parser import ParserExit, UsageError
         from shellkit.runtime import Runtime
 
         argv = list(sys.argv[1:] if argv is None else argv)
-        debug = False
-        while argv and argv[0].startswith('-'):
-            flag = argv.pop(0)
-            if flag in ('-d', '--debug'):
-                debug = True
-            elif flag in ('-V', '--version'):
-                print(f"{self.name} {self.version or ''}".strip())
-                return 0
-            elif flag in ('-h', '--help'):
-                runtime = Runtime(self)
-                from shellkit.help import show_overview
-                show_overview(runtime)
-                return 0
-            else:
-                print(f"{self.name}: unknown option {flag}", file=sys.stderr)
-                return 2
+        try:
+            options = self.launch_parser().parse_args(argv)
+        except UsageError as e:
+            print(f"{self.name}: {e}", file=sys.stderr)
+            return 2
+        except ParserExit as e:
+            return e.status
 
-        runtime = Runtime(self)
-        runtime.debug = debug or runtime.settings.get('debug')
+        if options.version:
+            print(f"{self.name} {self.version or ''}".strip())
+            return 0
 
-        if argv and self.oneshot:
+        runtime = Runtime(self, options=options)
+        runtime.debug = options.debug or runtime.settings.get('debug')
+
+        if options.help:
+            from shellkit.help import show_overview
+            show_overview(runtime)
+            return 0
+
+        if options.command and self.oneshot:
             try:
-                return runtime.execute_tokens(argv)
+                return runtime.execute_tokens(options.command)
             except KeyboardInterrupt:
                 return 130
 

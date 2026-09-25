@@ -26,7 +26,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from shellkit.context import ContextError, ContextStore, MissingContext, fill_context
-from shellkit.parser import ParserExit, UsageError
+from shellkit.parser import CommandError, ParserExit, UsageError
 from shellkit.settings import Settings
 from shellkit.text import has_unquoted, split_unquoted, strip_ansi
 
@@ -63,10 +63,13 @@ class Runtime:
         cwd: The shell's working directory
         running: Cleared by `exit` to end the interactive loop
         debug: Show tracebacks for errors in commands
+        options: The launch options (App.launch_option), parsed
+        state: What App(setup=...) returned: the app's own objects
+               (database, managers) for commands to use
     """
 
     def __init__(self, app, console: Optional[Console] = None,
-                 err_console: Optional[Console] = None):
+                 err_console: Optional[Console] = None, options=None):
         global _current
         self.app = app
         self.console = console or Console()
@@ -86,7 +89,9 @@ class Runtime:
 
         self.parser = app.build_parser()
         self.builtins = app.builtin_table()
+        self.options = options if options is not None else app.default_options()
         _current = self
+        self.state = app.setup(self) if app.setup is not None else None
 
     # -- conveniences for commands -----------------------------------------------
 
@@ -319,6 +324,9 @@ class Runtime:
             # a command that parses further arguments itself
             return self._report_usage_error(e)
         except ParserExit as e:
+            return e.status
+        except CommandError as e:
+            self.error(escape(str(e)))
             return e.status
         except Exception as e:
             self.error(escape(str(e)) or type(e).__name__)

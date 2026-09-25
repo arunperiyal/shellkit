@@ -31,6 +31,19 @@ class ParserExit(Exception):
         self.status = status
 
 
+class CommandError(Exception):
+    """
+    A command refusing its input: `raise CommandError("pass --all or a key")`.
+
+    Reported as "Error: <message>" with no traceback, and the command's
+    status is `status` (2 by default, as for a usage error).
+    """
+
+    def __init__(self, message, status=2):
+        super().__init__(message)
+        self.status = status
+
+
 class ShellkitParser(argparse.ArgumentParser):
     """
     ArgumentParser that raises UsageError / ParserExit instead of exiting.
