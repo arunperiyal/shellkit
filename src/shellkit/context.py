@@ -198,6 +198,29 @@ class ContextDefault:
         return f"<from context: {self.key}>"
 
 
+class ContextListDefault(ContextDefault, list):
+    """
+    The marker for append/extend arguments.
+
+    argparse copies an append argument's default and appends to the copy, so
+    the marker has to be a list: empty means the user gave none, anything in
+    it is what they gave.
+    """
+
+    def __init__(self, *args, **kwargs):
+        list.__init__(self)
+        ContextDefault.__init__(self, *args, **kwargs)
+
+    __hash__ = None
+
+
+def _omitted(value) -> bool:
+    """True if `value` is a marker the user did not replace."""
+    if isinstance(value, ContextListDefault):
+        return len(value) == 0
+    return isinstance(value, ContextDefault)
+
+
 class MissingContext(Exception):
     """A required context argument was neither given nor set with `use`."""
 
@@ -239,8 +262,8 @@ def add_context_arg(parser, key: str, *flags: str, required: bool = True,
     if not flags[0].startswith('-'):
         kwargs.setdefault('nargs', '?')
     fallback = kwargs.pop('default', None)
-    kwargs['default'] = ContextDefault(key, required, resolve, fallback,
-                                       convert=kwargs.get('type'))
+    marker = ContextListDefault if kwargs.get('action') in ('append', 'extend') else ContextDefault
+    kwargs['default'] = marker(key, required, resolve, fallback, convert=kwargs.get('type'))
     kwargs.setdefault('help', f"(default: the `use {key}:` context)")
     action = parser.add_argument(*flags, **kwargs)
     action.context_key = key
@@ -249,7 +272,7 @@ def add_context_arg(parser, key: str, *flags: str, required: bool = True,
 
 def explicit(namespace, dest: str) -> bool:
     """True if the user gave `dest` on the command line (for resolve functions)."""
-    return not isinstance(getattr(namespace, dest, None), ContextDefault)
+    return not _omitted(getattr(namespace, dest, None))
 
 
 def fill_context(namespace, store: ContextStore) -> List[Tuple[str, str]]:
@@ -269,7 +292,10 @@ def fill_context(namespace, store: ContextStore) -> List[Tuple[str, str]]:
     fills = {}
     used = []
     for dest, marker in vars(namespace).items():
-        if not isinstance(marker, ContextDefault):
+        if isinstance(marker, ContextListDefault) and marker:
+            fills[dest] = list(marker)      # what the user gave, as a plain list
+            continue
+        if not _omitted(marker):
             continue
         if marker.resolve is not None:
             value = marker.resolve(store, namespace)
@@ -284,7 +310,7 @@ def fill_context(namespace, store: ContextStore) -> List[Tuple[str, str]]:
                 except (TypeError, ValueError) as e:
                     raise ContextError(
                         f"context {marker.key}:{shown} does not fit --{dest}: {e}") from e
-            fills[dest] = value
+            fills[dest] = [value] if isinstance(marker, ContextListDefault) else value
             used.append((marker.key, shown))
         elif marker.required:
             raise MissingContext(marker.key, dest)

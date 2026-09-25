@@ -176,3 +176,19 @@ def test_type_applies_to_context_values():
     args = p.parse_args(['--t1', '1'])
     fill_context(args, s)
     assert args.node == '5'
+
+
+def test_append_arguments():
+    s = store()
+    s.set('case', 'U')
+    p = argparse.ArgumentParser()
+    add_context_arg(p, 'case', '--var', action='append', type=str, required=False)
+    args = p.parse_args([])
+    fill_context(args, s)
+    assert args.var == ['U']
+    args = p.parse_args(['--var', 'a', '--var', 'b'])
+    fill_context(args, s)
+    assert args.var == ['a', 'b'] and type(args.var) is list
+    args = p.parse_args([])
+    fill_context(args, store())
+    assert args.var is None
