@@ -10,7 +10,7 @@ from shellkit.app import App
 from shellkit.builtins import Builtin
 from shellkit.command import BaseCommand
 from shellkit.completion import paths
-from shellkit.context import ContextKey, add_context_arg
+from shellkit.context import ContextKey, add_context_arg, explicit
 from shellkit.parser import ShellkitParser, UsageError
 from shellkit.registry import CommandRegistry
 from shellkit.runtime import Runtime, current_runtime
@@ -20,6 +20,6 @@ __version__ = '0.1.0'
 
 __all__ = [
     'App', 'BaseCommand', 'Builtin', 'CommandRegistry', 'ContextKey', 'Runtime',
-    'Setting', 'ShellkitParser', 'UsageError', 'add_context_arg', 'current_runtime',
+    'Setting', 'ShellkitParser', 'UsageError', 'add_context_arg', 'current_runtime', 'explicit',
     'parse_bool', 'paths',
 ]

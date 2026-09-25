@@ -3,7 +3,7 @@ import argparse
 import pytest
 
 from shellkit.context import (ContextError, ContextKey, ContextStore, MissingContext,
-                              add_context_arg, fill_context)
+                              add_context_arg, explicit, fill_context)
 from shellkit.text import has_unquoted, split_unquoted, strip_ansi
 
 
@@ -121,3 +121,58 @@ def test_missing_optional_context_is_none():
     args = make_parser().parse_args([])
     fill_context(args, s)
     assert args.node is None
+
+
+def window_parser():
+    """--t1/--t2 where a single `time` fills both, but only if neither is given."""
+    def end(name):
+        def resolve(store, ns):
+            if store.is_set(name):
+                return store.get(name)
+            if store.is_set('time') and not explicit(ns, 't1') and not explicit(ns, 't2'):
+                return store.get('time')
+            return None
+        return resolve
+
+    p = argparse.ArgumentParser()
+    add_context_arg(p, 't1', '--t1', type=float, required=False, resolve=end('t1'))
+    add_context_arg(p, 't2', '--t2', type=float, required=False, resolve=end('t2'))
+    add_context_arg(p, 'node', '--node', type=int, required=False, default=-1)
+    return p
+
+
+def test_resolve_derives_values():
+    s = store()
+    s.set('time', '7')
+    args = window_parser().parse_args([])
+    used = fill_context(args, s)
+    assert (args.t1, args.t2) == (7.0, 7.0)
+    assert used == [('t1', '7.0'), ('t2', '7.0')]
+
+
+def test_resolve_sees_what_the_user_typed():
+    s = store()
+    s.set('time', '7')
+    args = window_parser().parse_args(['--t1', '2'])
+    fill_context(args, s)
+    assert (args.t1, args.t2) == (2.0, None)
+
+
+def test_fallback_default_when_context_gives_nothing():
+    args = window_parser().parse_args([])
+    fill_context(args, store())
+    assert args.node == -1
+
+
+def test_type_applies_to_context_values():
+    s = store()
+    s.set('node', '5')
+    p = argparse.ArgumentParser()
+    add_context_arg(p, 'node', '--node', type=str, required=False)
+    add_context_arg(p, 't1', '--t1', type=int, required=False)
+    s.set('t1', '2.5')
+    with pytest.raises(ContextError, match='does not fit'):
+        fill_context(p.parse_args([]), s)
+    args = p.parse_args(['--t1', '1'])
+    fill_context(args, s)
+    assert args.node == '5'

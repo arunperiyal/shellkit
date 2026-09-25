@@ -187,9 +187,12 @@ class ContextDefault:
     parsing untouched and fill_context() can find it on the namespace.
     """
 
-    def __init__(self, key: str, required: bool):
+    def __init__(self, key: str, required: bool, resolve=None, fallback=None, convert=None):
         self.key = key
         self.required = required
+        self.resolve = resolve
+        self.fallback = fallback
+        self.convert = convert
 
     def __repr__(self):
         return f"<from context: {self.key}>"
@@ -204,17 +207,28 @@ class MissingContext(Exception):
         self.dest = dest
 
 
-def add_context_arg(parser, key: str, *flags: str, required: bool = True, **kwargs):
+def add_context_arg(parser, key: str, *flags: str, required: bool = True,
+                    resolve: Optional[Callable] = None, **kwargs):
     """
     Add an argument that falls back to the `key` context when omitted.
 
     Parameters:
         parser: The (sub)parser to add to
-        key: Context key name
+        key: Context key name (for completion, the echo, and the default lookup)
         flags: Option strings such as '--node'. None gives a positional
                named `key` with nargs='?'.
-        required: If True, a missing argument with no context set is an error.
-                  If False it is left as None.
+        required: If True, a missing argument with no context value is an
+                  error. If False it gets `default`.
+        resolve: (store, namespace) -> value or None, in place of reading the
+                 `key` context directly. For values derived from context: a
+                 single `time` standing in for both ends of a --t1/--t2 range,
+                 say. The namespace still holds ContextDefault for every
+                 argument the user omitted; explicit() tells them apart.
+        default: What the argument gets when omitted and the context gives
+                 nothing (default None). argparse's own default is taken over
+                 by the marker.
+        type: As for add_argument; also applied to the context value (as
+              text), so the command gets what typing it would have given.
         kwargs: Passed to add_argument (type, help, metavar, ...)
 
     Returns:
@@ -224,33 +238,59 @@ def add_context_arg(parser, key: str, *flags: str, required: bool = True, **kwar
         flags = (key,)
     if not flags[0].startswith('-'):
         kwargs.setdefault('nargs', '?')
-    kwargs['default'] = ContextDefault(key, required)
+    fallback = kwargs.pop('default', None)
+    kwargs['default'] = ContextDefault(key, required, resolve, fallback,
+                                       convert=kwargs.get('type'))
     kwargs.setdefault('help', f"(default: the `use {key}:` context)")
     action = parser.add_argument(*flags, **kwargs)
     action.context_key = key
     return action
 
 
-def fill_context(namespace, store: ContextStore) -> List[Tuple[str, ContextValue]]:
+def explicit(namespace, dest: str) -> bool:
+    """True if the user gave `dest` on the command line (for resolve functions)."""
+    return not isinstance(getattr(namespace, dest, None), ContextDefault)
+
+
+def fill_context(namespace, store: ContextStore) -> List[Tuple[str, str]]:
     """
-    Replace every ContextDefault on `namespace` with the context's value.
+    Replace every ContextDefault on `namespace` with its context value.
+
+    Every value is worked out before any is set, so each resolve function sees
+    what the user typed, not what an earlier fill put there.
 
     Returns:
-        (key, value) pairs that were filled, for the "Using case: ..." echo
+        (key, value shown) pairs that were filled, for the "Using ..." echo
 
     Raises:
-        MissingContext: A required context argument had no context set
+        MissingContext: A required context argument had no context value
+        ContextError: A context value the argument's `type` rejects
     """
+    fills = {}
     used = []
-    for dest, value in vars(namespace).items():
-        if not isinstance(value, ContextDefault):
+    for dest, marker in vars(namespace).items():
+        if not isinstance(marker, ContextDefault):
             continue
-        entry = store.entry(value.key)
-        if entry is not None:
-            setattr(namespace, dest, entry.value)
-            used.append((value.key, entry))
-        elif value.required:
-            raise MissingContext(value.key, dest)
+        if marker.resolve is not None:
+            value = marker.resolve(store, namespace)
+            shown = None if value is None else str(value)
         else:
-            setattr(namespace, dest, None)
+            entry = store.entry(marker.key)
+            value, shown = (entry.value, entry.raw) if entry is not None else (None, None)
+        if value is not None:
+            if marker.convert is not None:
+                try:
+                    value = marker.convert(shown)
+                except (TypeError, ValueError) as e:
+                    raise ContextError(
+                        f"context {marker.key}:{shown} does not fit --{dest}: {e}") from e
+            fills[dest] = value
+            used.append((marker.key, shown))
+        elif marker.required:
+            raise MissingContext(marker.key, dest)
+        else:
+            fills[dest] = marker.fallback
+
+    for dest, value in fills.items():
+        setattr(namespace, dest, value)
     return used
