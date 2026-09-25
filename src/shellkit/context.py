@@ -251,7 +251,8 @@ def add_context_arg(parser, key: str, *flags: str, required: bool = True,
                  nothing (default None). argparse's own default is taken over
                  by the marker.
         type: As for add_argument; also applied to the context value (as
-              text), so the command gets what typing it would have given.
+              text, str(value)), so the command gets what typing that
+              value would have given.
         kwargs: Passed to add_argument (type, help, metavar, ...)
 
     Returns:
@@ -305,8 +306,10 @@ def fill_context(namespace, store: ContextStore) -> List[Tuple[str, str]]:
             value, shown = (entry.value, entry.raw) if entry is not None else (None, None)
         if value is not None:
             if marker.convert is not None:
+                # the parsed value, not the text typed after `use`: a case
+                # typed as `CaseA` is stored as its absolute path
                 try:
-                    value = marker.convert(shown)
+                    value = marker.convert(value if isinstance(value, str) else str(value))
                 except (TypeError, ValueError) as e:
                     raise ContextError(
                         f"context {marker.key}:{shown} does not fit --{dest}: {e}") from e

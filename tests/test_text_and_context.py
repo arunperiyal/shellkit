@@ -192,3 +192,14 @@ def test_append_arguments():
     args = p.parse_args([])
     fill_context(args, store())
     assert args.var is None
+
+
+def test_type_converts_the_parsed_value_not_the_typed_text():
+    s = ContextStore([ContextKey('case', parse=lambda raw: '/abs/' + raw)])
+    s.set('case', 'C1')
+    p = argparse.ArgumentParser()
+    add_context_arg(p, 'case', type=str, required=False)
+    args = p.parse_args([])
+    used = fill_context(args, s)
+    assert args.case == '/abs/C1'
+    assert used == [('case', 'C1')]      # the echo still shows what was typed
