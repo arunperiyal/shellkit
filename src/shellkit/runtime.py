@@ -25,7 +25,7 @@ from typing import List, Optional
 from rich.console import Console
 from rich.markup import escape
 
-from shellkit.context import ContextStore, MissingContext, fill_context
+from shellkit.context import ContextError, ContextStore, MissingContext, fill_context
 from shellkit.parser import ParserExit, UsageError
 from shellkit.settings import Settings
 from shellkit.text import has_unquoted, split_unquoted, strip_ansi
@@ -277,10 +277,13 @@ class Runtime:
             self.error(f"no {e.key} given, and no context set "
                        f"(pass one, or [cyan]use {e.key}:VALUE[/cyan])")
             return 2
+        except ContextError as e:
+            self.error(escape(str(e)))
+            return 2
 
         if used and self.settings.get('echo_context'):
-            for key, entry in used:
-                self.console.print(f"[dim]Using {key}: {escape(entry.raw)}[/dim]")
+            for key, shown in used:
+                self.console.print(f"[dim]Using {key}: {escape(shown)}[/dim]")
 
         return self._guarded(lambda: command.run(args, self))
 
