@@ -74,13 +74,17 @@ sys.exit(app.run())          # no args -> shell; args -> run once and exit
 5. **Context is generic.** `ContextKey(name, parse, complete, path, label,
    style, format, clears)` replaces the per-key `use_x`/`unuse_x` methods.
    `use list`, `use last` and the on-exit snapshot come from the keys.
-6. **Apps add builtins** with `@app.builtin('web', help=...)`, so things like
+6. **App state and launch options.** `App(setup=fn)` runs once per runtime
+   and its result is `rt.state` (a database, managers). `app.launch_option()`
+   adds options before the command, parsed into `rt.options`.
+   `CommandError(message, status=2)` refuses input without a traceback.
+7. **Apps add builtins** with `@app.builtin('web', help=...)`, so things like
    flexflow's `web`, `quota`, `du`, `find` stay in flexflow.
-7. **Storage** is per app: `~/.name` by default, or a relative path to keep it
+8. **Storage** is per app: `~/.name` by default, or a relative path to keep it
    with the project. File names match flexflow's (`history`, `aliases`,
    `settings.json`; `timeout` is stored as `timeout_minutes`), so existing
    files carry over.
-8. **Python >= 3.10.**
+9. **Python >= 3.10.**
 
 ## Line pipeline
 
@@ -119,13 +123,17 @@ that is running when the time is up finishes first, then the shell exits.
 ## Migration plan
 
 1. **Build shellkit** from flexflow's `cli/`, with tests. *(done)*
-2. **Port flexflow_manager.** *(done, branch `shellkit-port`)* Parsers take
+2. **Port flexflow_manager.** *(done, merged)* Parsers take
    contexts through `add_context_arg` helpers in `src/cli/context.py`;
    `interactive.py`, `registry.py`, `parser.py` are gone. Commands still use
    `execute(self, args)`, which shellkit accepts; moving them to `ctx` can
    happen one at a time. `use case:*` needed nothing: `*` is passed through
    and the commands already handle it. The bash/zsh completion installer
    (`src/cli/completion.py`) stays in flexflow, untouched.
-3. **Port reference_manager** from click to argparse: each `cli/groups/*.py`
-   group becomes a BaseCommand; `session.py` and `repl.py` go away; the
-   study/item `use` becomes ContextKeys; `storage='.refman'`.
+3. **Port reference_manager** from click to argparse. *(done, branch
+   `shellkit-port`)* Each `cli/groups/*.py` group is a BaseCommand whose
+   subcommands are the unchanged command functions; `repl.py`, `session.py`
+   and `root.py` are gone; `use study:` is a ContextKey; `storage='.refman'`.
+   It needed three shellkit additions: `App.launch_option()` (its `--db`),
+   `App(setup=...)` / `rt.state` (the CliContext of managers every command
+   uses), and `CommandError` (click.UsageError's replacement).
