@@ -63,6 +63,11 @@ sys.exit(app.run())          # no args -> shell; args -> run once and exit
    a positional with `nargs='?'` whose default is a sentinel; after parsing,
    `fill_context` swaps sentinels for context values (or errors if required
    and unset). This replaces flexflow's `_inject_*_context` position tables.
+   For values derived from several contexts, `resolve=(store, namespace)`
+   computes the value (flexflow: a single `time` as a `--t1/--t2` window);
+   `explicit(ns, dest)` tells it what the user typed. `default=` is the value
+   when the context gives nothing, `type=` is applied to context values too,
+   and append arguments get `[value]`.
 4. **Completion is generated** by walking argparse: subcommands (with help),
    flags (with help, not repeated once used), `choices`, context keys, and
    per-argument `action.completer`. `paths(exts=...)` is provided.
@@ -114,15 +119,13 @@ that is running when the time is up finishes first, then the shell exits.
 ## Migration plan
 
 1. **Build shellkit** from flexflow's `cli/`, with tests. *(done)*
-2. **Port flexflow_manager.** Commands move to `execute(args, ctx)` and
-   `add_context_arg`; `interactive.py` shrinks to ContextKeys + app builtins.
-   Things to carry over or decide there:
-   - `use case:*` (iterate over all cases) -- a flexflow feature, not a
-     framework one; likely a wrapper in flexflow's case commands.
-   - `set prompt --level N` becomes `set prompt_level N` (alias possible).
-   - The file-type colours in `ls`/`tree` via `App(file_style=...)`.
-   - The bash/zsh completion script installer (`cli/completion.py`) is not
-     in shellkit; flexflow always starts the shell, so it may not be needed.
+2. **Port flexflow_manager.** *(done, branch `shellkit-port`)* Parsers take
+   contexts through `add_context_arg` helpers in `src/cli/context.py`;
+   `interactive.py`, `registry.py`, `parser.py` are gone. Commands still use
+   `execute(self, args)`, which shellkit accepts; moving them to `ctx` can
+   happen one at a time. `use case:*` needed nothing: `*` is passed through
+   and the commands already handle it. The bash/zsh completion installer
+   (`src/cli/completion.py`) stays in flexflow, untouched.
 3. **Port reference_manager** from click to argparse: each `cli/groups/*.py`
    group becomes a BaseCommand; `session.py` and `repl.py` go away; the
    study/item `use` becomes ContextKeys; `storage='.refman'`.
