@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shellkit"
+version = "0.1.0"
+description = "Framework for prompt-based CLI programs: an argparse command registry, an interactive shell with context, aliases, chaining, pipes and completion."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Arun Periyal", email = "periyal.arun@gmail.com" }]
+dependencies = [
+    "prompt_toolkit>=3.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
