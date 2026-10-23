@@ -27,7 +27,7 @@ src/shellkit/
   text.py         quote-aware ; and | splitting, ANSI stripping
   builtins/
     core.py       exit help clear history alias unalias use unuse set
-    files.py      cd pwd ls cat head tail grep tree cp rm vi/vim/nano
+    files.py      cd pwd ls cat head tail grep tree du cp rm vi/vim/nano
 ```
 
 ## What an app writes
