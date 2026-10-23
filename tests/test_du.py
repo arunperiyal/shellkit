@@ -1,5 +1,6 @@
-"""`du [-d N] [-s] [--dirs] [path]`: sizes of the entries of a directory down
-to N levels (default 1), largest first within each level, with a total."""
+"""`du [-d N] [-n N] [-s] [--dirs] [path]`: sizes of the entries of a directory
+down to N levels (default 1), largest first within each level (only the N
+largest with -n), with a total."""
 
 import re
 
@@ -48,6 +49,19 @@ def test_dirs_only_and_summary(sh, tree):
     assert rows(sh, 'du -d 0 CS1') == [('3.5KB', '.')]
 
 
+def test_top_n_keeps_the_largest_of_each_directory(sh, tree):
+    assert rows(sh, 'du -n 1 CS1') == [('3.4KB', 'RUN_1/'), ('3.5KB', '.')]
+    assert [p for _, p in rows(sh, 'du -n1 -d 2 CS1')] == ['RUN_1/', 'RUN_1/binary/', '.']
+    assert len(rows(sh, 'du -n 10 CS1')) == 4                 # more than there are
+
+
+def test_top_n_table_says_what_it_left_out(sh, tree):
+    status, out, _ = sh.run('du -n 1 CS1')
+    assert status == 0
+    assert '... 2 more' in out and '110.0B' in out            # post/ + simflow.config
+    assert '3.5KB' in out                                     # the total still counts all
+
+
 def test_symlinks_are_not_followed(sh, tree):
     (tree / 'link').symlink_to(tree / 'RUN_1')
     sizes = dict((p, s) for s, p in rows(sh, 'du CS1'))
@@ -64,6 +78,7 @@ def test_table_indents_each_level_and_shows_the_total(sh, tree):
 
 @pytest.mark.parametrize('line, message', [
     ('du -d', '-d needs a value'), ('du -d x', 'whole number'), ('du -d -1', '0 or more'),
+    ('du -n 0', '-n must be 1 or more'), ('du -n', '-n needs a value'),
     ('du -x', 'unknown option -x'), ('du a b', 'usage: du'), ('du nope', 'not a directory'),
 ])
 def test_bad_arguments(sh, tree, line, message):
