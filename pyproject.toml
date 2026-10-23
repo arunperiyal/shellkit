@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shellkit"
-version = "0.1.2"
+version = "0.1.3"
 description = "Framework for prompt-based CLI programs: an argparse command registry, an interactive shell with context, aliases, chaining, pipes and completion."
 readme = "README.md"
 requires-python = ">=3.10"
