@@ -57,15 +57,18 @@ def builtins():
         Builtin('tree', _tree, help='Directory tree', usage='tree [depth] [path]',
                 complete=_dirs, category=files),
         Builtin('du', _du, help='Disk usage of directory entries',
-                usage='du [-d N] [-n N] [-s] [--dirs] [path]',
+                usage='du [-d N] [-n N] [--sort size|name] [-s] [--dirs] [path]',
                 details="  [cyan]-d N[/cyan]    Show entries down to N levels (default 1; also --depth N)\n"
                         "  [cyan]-n N[/cyan]    Only the largest N entries of each directory\n"
+                        "  [cyan]--sort K[/cyan]  Order each level by size (default) or name\n"
                         "  [cyan]-s[/cyan]      Only the total (same as -d 0)\n"
                         "  [cyan]--dirs[/cyan]  Directories only, no files\n"
-                        "[dim]Each level is sorted largest first; symlinks are not followed.\n"
+                        "[dim]-n picks the largest N whatever --sort is; --sort name only\n"
+                        "orders them (RUN_2 before RUN_10). Symlinks are not followed.\n"
                         "In a pipe it prints size<TAB>path lines.\n"
                         "  du -d 2 data         # data, what is in it, and one level more\n"
                         "  du -n 5              # the five largest entries here\n"
+                        "  du --sort name -d 2  # in name order, as ls lists them\n"
                         "  du -s build          # one number\n"
                         "  du --dirs -d 3       # where the space is, without the files[/dim]",
                 complete=_dirs, category=files),
@@ -482,19 +485,28 @@ def _tree(rt, argv):
 
 # -- du --------------------------------------------------------------------------------
 
-_DU_USAGE = "usage: du [-d N] [-n N] [-s] [--dirs] [path]"
+_DU_USAGE = "usage: du [-d N] [-n N] [--sort size|name] [-s] [--dirs] [path]"
+_DU_SORTS = ('size', 'name')
 
 
 def _du_args(argv):
-    """(path or None, depth, top, dirs_only) or an error message."""
+    """(path or None, depth, top, sort, dirs_only) or an error message."""
     numbers = {'depth': 1, 'top': None}
-    dirs_only, rest = False, []
+    sort, dirs_only, rest = 'size', False, []
     flags = {'-d': ('depth', 0), '--depth': ('depth', 0), '-n': ('top', 1)}
     args = iter(argv)
     for arg in args:
         name, eq, value = arg.partition('=')
         joined = arg[:2] in ('-d', '-n') and arg[2:].isdigit()    # -d2, -n5
-        if name in flags or joined:
+        if name == '--sort':
+            if not eq:
+                value = next(args, None)
+                if value is None:
+                    return f"--sort needs one of {', '.join(_DU_SORTS)}"
+            if value not in _DU_SORTS:
+                return f"--sort is {' or '.join(_DU_SORTS)}, not '{value}'"
+            sort = value
+        elif name in flags or joined:
             if joined:
                 name, value = arg[:2], arg[2:]
             elif not eq:
@@ -518,7 +530,7 @@ def _du_args(argv):
             rest.append(arg)
     if len(rest) > 1:
         return _DU_USAGE
-    return (rest[0] if rest else None), numbers['depth'], numbers['top'], dirs_only
+    return (rest[0] if rest else None), numbers['depth'], numbers['top'], sort, dirs_only
 
 
 def _du_sizes(root: Path, depth: int):
@@ -543,13 +555,18 @@ def _du_sizes(root: Path, depth: int):
     return totals, listing
 
 
+def _natural_name(name: str):
+    """RUN_2 before RUN_10, ignoring case."""
+    return [int(p) if p.isdigit() else p.lower() for p in re.split(r'(\d+)', name)]
+
+
 def _du(rt, argv):
     """Size of each entry in a directory, largest first, down to -d levels."""
     parsed = _du_args(argv)
     if isinstance(parsed, str):
         rt.error(f"du: {parsed}" if not parsed.startswith('usage') else parsed)
         return 2
-    path, depth, top, dirs_only = parsed
+    path, depth, top, sort, dirs_only = parsed
     target = rt.resolve_path(path) if path else rt.cwd
     if not target.is_dir():
         rt.error(f"du: not a directory: {escape(str(target))}")
@@ -573,6 +590,8 @@ def _du(rt, argv):
             entries += [(size, name, False) for name, size in files]
         entries.sort(key=lambda e: (-e[0], e[1]))
         shown, rest = (entries[:top], entries[top:]) if top else (entries, [])
+        if sort == 'name':
+            shown.sort(key=lambda e: _natural_name(e[1]))
         for size, name, is_dir in shown:
             child = os.path.join(directory, name)
             rows.append((size, level, os.path.relpath(child, target), is_dir))

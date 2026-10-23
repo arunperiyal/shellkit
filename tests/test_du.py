@@ -1,4 +1,4 @@
-"""`du [-d N] [-n N] [-s] [--dirs] [path]`: sizes of the entries of a directory
+"""`du [-d N] [-n N] [--sort size|name] [-s] [--dirs] [path]`: sizes of the entries of a directory
 down to N levels (default 1), largest first within each level (only the N
 largest with -n), with a total."""
 
@@ -62,6 +62,18 @@ def test_top_n_table_says_what_it_left_out(sh, tree):
     assert '3.5KB' in out                                     # the total still counts all
 
 
+def test_sort_by_name_is_natural_at_every_level(sh, tree):
+    for n in (10, 2, 1):
+        (tree / f'RUN_{n}').mkdir(exist_ok=True)
+    assert [p for _, p in rows(sh, 'du --sort name --dirs -d 2 CS1')] == [
+        'post/', 'RUN_1/', 'RUN_1/binary/', 'RUN_2/', 'RUN_10/', '.']
+    assert [p for _, p in rows(sh, 'du --sort=name CS1')][0] == 'post/'
+
+
+def test_top_n_picks_by_size_then_sort_name_orders_them(sh, tree):
+    assert [p for _, p in rows(sh, 'du -n 2 --sort name CS1')] == ['post/', 'RUN_1/', '.']
+
+
 def test_symlinks_are_not_followed(sh, tree):
     (tree / 'link').symlink_to(tree / 'RUN_1')
     sizes = dict((p, s) for s, p in rows(sh, 'du CS1'))
@@ -79,6 +91,7 @@ def test_table_indents_each_level_and_shows_the_total(sh, tree):
 @pytest.mark.parametrize('line, message', [
     ('du -d', '-d needs a value'), ('du -d x', 'whole number'), ('du -d -1', '0 or more'),
     ('du -n 0', '-n must be 1 or more'), ('du -n', '-n needs a value'),
+    ('du --sort', '--sort needs one of size, name'), ('du --sort age', "not 'age'"),
     ('du -x', 'unknown option -x'), ('du a b', 'usage: du'), ('du nope', 'not a directory'),
 ])
 def test_bad_arguments(sh, tree, line, message):
