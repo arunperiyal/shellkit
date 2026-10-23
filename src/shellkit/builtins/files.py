@@ -57,13 +57,15 @@ def builtins():
         Builtin('tree', _tree, help='Directory tree', usage='tree [depth] [path]',
                 complete=_dirs, category=files),
         Builtin('du', _du, help='Disk usage of directory entries',
-                usage='du [-d N] [-s] [--dirs] [path]',
+                usage='du [-d N] [-n N] [-s] [--dirs] [path]',
                 details="  [cyan]-d N[/cyan]    Show entries down to N levels (default 1; also --depth N)\n"
+                        "  [cyan]-n N[/cyan]    Only the largest N entries of each directory\n"
                         "  [cyan]-s[/cyan]      Only the total (same as -d 0)\n"
                         "  [cyan]--dirs[/cyan]  Directories only, no files\n"
                         "[dim]Each level is sorted largest first; symlinks are not followed.\n"
                         "In a pipe it prints size<TAB>path lines.\n"
                         "  du -d 2 data         # data, what is in it, and one level more\n"
+                        "  du -n 5              # the five largest entries here\n"
                         "  du -s build          # one number\n"
                         "  du --dirs -d 3       # where the space is, without the files[/dim]",
                 complete=_dirs, category=files),
@@ -480,31 +482,34 @@ def _tree(rt, argv):
 
 # -- du --------------------------------------------------------------------------------
 
-_DU_USAGE = "usage: du [-d N] [-s] [--dirs] [path]"
+_DU_USAGE = "usage: du [-d N] [-n N] [-s] [--dirs] [path]"
 
 
 def _du_args(argv):
-    """(path or None, depth, dirs_only) or an error message."""
-    depth, dirs_only, rest = 1, False, []
+    """(path or None, depth, top, dirs_only) or an error message."""
+    numbers = {'depth': 1, 'top': None}
+    dirs_only, rest = False, []
+    flags = {'-d': ('depth', 0), '--depth': ('depth', 0), '-n': ('top', 1)}
     args = iter(argv)
     for arg in args:
         name, eq, value = arg.partition('=')
-        joined = arg.startswith('-d') and arg[2:].isdigit()       # -d2
-        if name in ('-d', '--depth') or joined:
+        joined = arg[:2] in ('-d', '-n') and arg[2:].isdigit()    # -d2, -n5
+        if name in flags or joined:
             if joined:
-                value = arg[2:]
+                name, value = arg[:2], arg[2:]
             elif not eq:
                 value = next(args, None)
                 if value is None:
                     return f"{name} needs a value"
+            key, lowest = flags[name]
             try:
-                depth = int(value)
+                numbers[key] = int(value)
             except ValueError:
                 return f"{name} needs a whole number, not '{value}'"
-            if depth < 0:
-                return f"{name} must be 0 or more"
+            if numbers[key] < lowest:
+                return f"{name} must be {lowest} or more"
         elif arg == '-s':
-            depth = 0
+            numbers['depth'] = 0
         elif arg == '--dirs':
             dirs_only = True
         elif arg.startswith('-') and len(arg) > 1:
@@ -513,7 +518,7 @@ def _du_args(argv):
             rest.append(arg)
     if len(rest) > 1:
         return _DU_USAGE
-    return (rest[0] if rest else None), depth, dirs_only
+    return (rest[0] if rest else None), numbers['depth'], numbers['top'], dirs_only
 
 
 def _du_sizes(root: Path, depth: int):
@@ -544,7 +549,7 @@ def _du(rt, argv):
     if isinstance(parsed, str):
         rt.error(f"du: {parsed}" if not parsed.startswith('usage') else parsed)
         return 2
-    path, depth, dirs_only = parsed
+    path, depth, top, dirs_only = parsed
     target = rt.resolve_path(path) if path else rt.cwd
     if not target.is_dir():
         rt.error(f"du: not a directory: {escape(str(target))}")
@@ -557,23 +562,30 @@ def _du(rt, argv):
 
     totals, listing = _du_sizes(target, depth)
     total = totals.get(str(target), 0)
-    rows = []                       # (bytes, level, path relative to target, is_dir)
+    # (bytes, level, path relative to target, is_dir); is_dir None for the
+    # "N more" line -n leaves in place of the rest of a directory
+    rows = []
 
     def walk(directory, level):
         subdirs, files = listing.get(directory, ([], []))
         entries = [(totals.get(os.path.join(directory, d), 0), d, True) for d in subdirs]
         if not dirs_only:
             entries += [(size, name, False) for name, size in files]
-        for size, name, is_dir in sorted(entries, key=lambda e: (-e[0], e[1])):
+        entries.sort(key=lambda e: (-e[0], e[1]))
+        shown, rest = (entries[:top], entries[top:]) if top else (entries, [])
+        for size, name, is_dir in shown:
             child = os.path.join(directory, name)
             rows.append((size, level, os.path.relpath(child, target), is_dir))
             if is_dir:
                 walk(child, level + 1)
+        if rest:
+            rows.append((sum(e[0] for e in rest), level, f"... {len(rest)} more", None))
     walk(str(target), 0)
 
     if rt.capturing:
         for size, _, rel, is_dir in rows:
-            rt.out(f"{format_size(size)}\t{rel}{'/' if is_dir else ''}")
+            if is_dir is not None:
+                rt.out(f"{format_size(size)}\t{rel}{'/' if is_dir else ''}")
         rt.out(f"{format_size(total)}\t.")
         return 0
     if not depth:
@@ -584,13 +596,16 @@ def _du(rt, argv):
         rt.console.print("[dim]Empty directory.[/dim]")
         return 0
 
-    table = Table(title=f"Disk Usage  ({escape(str(target))})", box=box.ROUNDED,
+    table = Table(title=f"Disk Usage  ({escape(_shown_path(rt, target))})", box=box.ROUNDED,
                   header_style='bold', show_footer=True)
     table.add_column('Size', justify='right', style='green', no_wrap=True,
                      footer=format_size(total))
     table.add_column('Name', footer='total')
     for size, level, rel, is_dir in rows:
-        table.add_row(format_size(size), '  ' * level + _styled(rt, target / rel))
+        if is_dir is None:
+            table.add_row(f"[dim]{format_size(size)}[/dim]", '  ' * level + f"[dim]{rel}[/dim]")
+        else:
+            table.add_row(format_size(size), '  ' * level + _styled(rt, target / rel))
     rt.console.print(table)
     return 0
 
