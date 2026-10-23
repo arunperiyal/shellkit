@@ -16,7 +16,7 @@ from shellkit.registry import CommandRegistry
 from shellkit.runtime import Runtime, current_runtime
 from shellkit.settings import Setting, parse_bool
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 __all__ = [
     'App', 'BaseCommand', 'Builtin', 'CommandError', 'CommandRegistry', 'ContextKey', 'Runtime',
