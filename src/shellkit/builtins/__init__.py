@@ -4,7 +4,7 @@ Shell builtins: commands handled by the shell itself rather than argparse.
 Builtins come in bundles an app opts into by name:
 
     core   exit, help, clear, history, alias, unalias, use, unuse, set
-    files  cd, pwd, ls, cat, head, tail, grep, tree, cp, rm, vi/vim/nano
+    files  cd, pwd, ls, cat, head, tail, grep, tree, du, cp, rm, vi/vim/nano
 
 An app adds its own with App.builtin().
 """
