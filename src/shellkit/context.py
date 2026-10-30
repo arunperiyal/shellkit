@@ -87,6 +87,8 @@ class ContextStore:
         for key in keys:
             self.add_key(key)
         self._values: Dict[str, ContextValue] = {}
+        # The context before each change this session, newest last (`use reset`)
+        self.history: List[Dict[str, ContextValue]] = []
 
     def add_key(self, key: ContextKey) -> None:
         if key.name in self.keys:
@@ -151,6 +153,29 @@ class ContextStore:
 
     def clear_all(self) -> None:
         self._values.clear()
+
+    # -- this session's changes ----------------------------------------------
+
+    HISTORY = 50
+
+    def snapshot(self) -> Dict[str, ContextValue]:
+        return dict(self._values)
+
+    def record(self, before: Dict[str, ContextValue]) -> None:
+        """Remember `before` as the context ahead of a change, if it changed."""
+        if before != self._values:
+            self.history.append(before)
+            del self.history[:-self.HISTORY]
+
+    def undo(self) -> bool:
+        """Put the context back as it was before the last change. The values
+        come back as they were parsed, not parsed again: a relative path
+        still names what it named. False when nothing has changed."""
+        if not self.history:
+            return False
+        before = self.history.pop()
+        self._values = {name: entry for name, entry in before.items() if name in self.keys}
+        return True
 
     def apply_tokens(self, tokens: Iterable[str], runtime=None) -> Tuple[List[str], List[str]]:
         """

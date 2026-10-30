@@ -62,7 +62,7 @@ def test_alias_expanded_for_completion(sh):
 
 def test_use_completion(sh):
     got = texts(sh, 'use ')
-    assert got[:2] == ['list', 'reset']
+    assert got[:3] == ['list', 'reset', 'restore']
     assert 'case:' in got and 'node:' in got
     assert 'case:' not in texts(sh, 'use case:A ')
 

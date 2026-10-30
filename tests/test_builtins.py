@@ -27,14 +27,14 @@ def test_unuse(sh):
     assert sh.rt.context.tokens() == []
 
 
-def test_use_reset_restores_snapshot(tmp_path, workdir):
+def test_use_restore_restores_snapshot(tmp_path, workdir):
     app = make_app(tmp_path)
     first = Harness(app)
     first.run('use case:A node:4')
     save_context_snapshot(first.rt)
 
     second = Harness(make_app(tmp_path))
-    _, out, _ = second.run('use reset')
+    _, out, _ = second.run('use restore')
     assert second.rt.context.tokens() == ['case:A', 'node:4']
 
 
@@ -45,18 +45,55 @@ def test_empty_context_does_not_overwrite_snapshot(tmp_path, workdir):
     empty = Harness(make_app(tmp_path))
     save_context_snapshot(empty.rt)
     third = Harness(make_app(tmp_path))
-    third.run('use reset')
+    third.run('use restore')
     assert third.rt.get('case') == 'A'
 
 
-def test_use_last_points_at_reset(tmp_path, workdir):
+def test_use_last_points_at_restore(tmp_path, workdir):
     first = Harness(make_app(tmp_path))
     first.run('use case:A')
     save_context_snapshot(first.rt)
     second = Harness(make_app(tmp_path))
     status, _, err = second.run('use last')
-    assert status == 1 and 'use reset' in err
+    assert status == 1 and 'use restore' in err
     assert second.rt.context.tokens() == []
+
+
+def test_use_reset_undoes_this_sessions_changes(tmp_path, workdir):
+    h = Harness(make_app(tmp_path))
+    h.run('use case:A')
+    h.run('use node:4')
+    h.run('use node:5 case:B')
+    h.run('unuse node')
+    assert h.rt.context.tokens() == ['case:B']
+    h.run('use reset')
+    assert h.rt.context.tokens() == ['case:B', 'node:5']
+    h.run('use reset')
+    assert h.rt.context.tokens() == ['case:A', 'node:4']
+    h.run('use reset')
+    h.run('use reset')
+    assert h.rt.context.tokens() == []
+    _, out, _ = h.run('use reset')
+    assert 'Nothing to reset' in out
+
+
+def test_use_reset_skips_what_changed_nothing(tmp_path, workdir):
+    h = Harness(make_app(tmp_path))
+    h.run('use case:A')
+    h.run('use case:A')                 # the same value: not a change
+    h.run('unuse node')                 # not set: not a change
+    h.run('use nope:1')                 # refused: not a change
+    h.run('use reset')
+    assert h.rt.context.tokens() == []
+
+
+def test_use_reset_keeps_the_parsed_values(tmp_path, workdir):
+    h = Harness(make_app(tmp_path))
+    h.run('use case:A')
+    first = h.rt.context.entry('case')
+    h.run('unuse all')
+    h.run('use reset')
+    assert h.rt.context.entry('case') is first
 
 
 # -- set / alias / history -----------------------------------------------------------
