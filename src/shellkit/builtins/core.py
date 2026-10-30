@@ -170,13 +170,6 @@ def _use(rt, argv):
         _use_list(rt)
         return 0
 
-    if argv == ['last']:
-        # The old spelling. A program may declare a `last` key (`use last:N`),
-        # so the bare word says where restoring went rather than doing it.
-        rt.warn("`use last` is now `use restore`: it restores the context the "
-                "last session ended with.")
-        return 1
-
     if argv == ['reset']:
         if not store.undo():
             rt.console.print("[dim]Nothing to reset: the context has not changed "
