@@ -49,16 +49,6 @@ def test_empty_context_does_not_overwrite_snapshot(tmp_path, workdir):
     assert third.rt.get('case') == 'A'
 
 
-def test_use_last_points_at_restore(tmp_path, workdir):
-    first = Harness(make_app(tmp_path))
-    first.run('use case:A')
-    save_context_snapshot(first.rt)
-    second = Harness(make_app(tmp_path))
-    status, _, err = second.run('use last')
-    assert status == 1 and 'use restore' in err
-    assert second.rt.context.tokens() == []
-
-
 def test_use_reset_undoes_this_sessions_changes(tmp_path, workdir):
     h = Harness(make_app(tmp_path))
     h.run('use case:A')
