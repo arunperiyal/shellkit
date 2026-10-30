@@ -20,7 +20,7 @@ from prompt_toolkit.styles import Style
 
 from shellkit.completion import ShellkitCompleter
 
-# Remembered context, restored by `use last`
+# Remembered context, restored by `use reset`
 LAST_CONTEXT_KEY = 'last_use_context_tokens'
 
 DEFAULT_STYLES = {
@@ -227,7 +227,7 @@ def default_prompt(rt, remaining=None) -> HTML:
 
 def save_context_snapshot(rt) -> None:
     """
-    Remember the context the session ended with, for `use last`.
+    Remember the context the session ended with, for `use reset`.
 
     On exit rather than on every `use`, so what comes back is the state the
     session was left in. Nothing is written when the context is empty, so
@@ -240,7 +240,7 @@ def save_context_snapshot(rt) -> None:
 
 
 def last_context_tokens(rt) -> List[str]:
-    """The saved `use last` tokens, dropping any for keys no longer declared."""
+    """The saved `use reset` tokens, dropping any for keys no longer declared."""
     raw = rt.settings.data.get(LAST_CONTEXT_KEY, [])
     if isinstance(raw, str):
         raw = raw.split()

@@ -73,7 +73,7 @@ sys.exit(app.run())          # no args -> shell; args -> run once and exit
    per-argument `action.completer`. `paths(exts=...)` is provided.
 5. **Context is generic.** `ContextKey(name, parse, complete, path, label,
    style, format, clears)` replaces the per-key `use_x`/`unuse_x` methods.
-   `use list`, `use last` and the on-exit snapshot come from the keys.
+   `use list`, `use reset` and the on-exit snapshot come from the keys.
 6. **App state and launch options.** `App(setup=fn)` runs once per runtime
    and its result is `rt.state` (a database, managers). `app.launch_option()`
    adds options before the command, parsed into `rt.options`.
