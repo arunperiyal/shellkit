@@ -32,7 +32,7 @@ def builtins():
         Builtin('unalias', _unalias, help='Remove aliases', usage='unalias <name> [name ...]',
                 complete=_complete_alias_names),
         Builtin('use', _use, help='Set context used by commands',
-                usage='use name:value [name:value ...] | use list | use last',
+                usage='use name:value [name:value ...] | use list | use reset',
                 complete=_complete_use, category='Context', own_help=True),
         Builtin('unuse', _unuse, help='Clear context', usage='unuse [name ...|all]',
                 complete=_complete_unuse, category='Context', own_help=True),
@@ -170,7 +170,14 @@ def _use(rt, argv):
         _use_list(rt)
         return 0
 
-    if argv[0] == 'last':
+    if argv == ['last']:
+        # The old spelling. A program may declare a `last` key (`use last:N`),
+        # so the bare word says where restoring went rather than doing it.
+        rt.warn("`use last` is now `use reset`: it restores the context the "
+                "last session ended with.")
+        return 1
+
+    if argv[0] == 'reset':
         tokens = last_context_tokens(rt)
         if not tokens:
             rt.console.print("[dim]No saved context. One is written when a shell "
@@ -210,7 +217,7 @@ def _use_list(rt):
         rt.console.print("[dim]Nothing set. `use name:value` to set one.[/dim]")
     if saved and saved != live:
         differs = ' '.join(f"{k}:{v}" for k, v in saved.items() if live.get(k) != v)
-        rt.console.print(f"[dim]`use last` would set: {escape(differs)}[/dim]")
+        rt.console.print(f"[dim]`use reset` would set: {escape(differs)}[/dim]")
 
 
 def _use_help(rt):
@@ -221,7 +228,7 @@ def _use_help(rt):
     console.print("[bold]USAGE:[/bold]")
     console.print("  use name:value [name:value ...]")
     console.print("  use list        [dim]# what is set, and what else can be[/dim]")
-    console.print("  use last        [dim]# the context the last session ended with[/dim]")
+    console.print("  use reset       [dim]# the context the last session ended with[/dim]")
     console.print()
     console.print("[bold]CONTEXTS:[/bold]")
     width = max(len(n) for n in rt.context.keys)
@@ -235,8 +242,8 @@ def _complete_use(rt, args, current):
     options = []
     if not args:
         options += [('list', 'Show every context, set or not'),
-                    ('last', 'Restore the context the last session ended with')]
-    elif args[0] in ('list', 'last'):
+                    ('reset', 'Restore the context the last session ended with')]
+    elif args[0] in ('list', 'reset'):
         return []
 
     if ':' in current:
