@@ -79,13 +79,20 @@ sys.exit(app.run())          # no args -> shell; args -> run once and exit
    and its result is `rt.state` (a database, managers). `app.launch_option()`
    adds options before the command, parsed into `rt.options`.
    `CommandError(message, status=2)` refuses input without a traceback.
-7. **Apps add builtins** with `@app.builtin('web', help=...)`, so things like
+7. **`version`** (core): `version show` prints the app's version, shellkit
+   and Python, and with `App(source_dir=...)` the checkout's branch, commit
+   and local changes; it fetches the upstream (or, on a branch without one,
+   origin's default branch) and lists the commits and newer tags it has.
+   Nothing is installed. `version comment <text>` saves a note stamped with
+   the version, commit, time, cwd, context and last command to
+   `comments.json`; `version comment` lists them, `--remove N` drops one.
+8. **Apps add builtins** with `@app.builtin('web', help=...)`, so things like
    flexflow's `web`, `quota`, `du`, `find` stay in flexflow.
-8. **Storage** is per app: `~/.name` by default, or a relative path to keep it
+9. **Storage** is per app: `~/.name` by default, or a relative path to keep it
    with the project. File names match flexflow's (`history`, `aliases`,
    `settings.json`; `timeout` is stored as `timeout_minutes`), so existing
    files carry over.
-9. **Python >= 3.10.**
+10. **Python >= 3.10.**
 
 ## Line pipeline
 

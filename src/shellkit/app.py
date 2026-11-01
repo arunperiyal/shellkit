@@ -50,6 +50,9 @@ class App:
         parser_class: ArgumentParser subclass for the top-level parser
         file_style: callable(Path) -> rich style or None, colouring names in
                     ls and tree (e.g. data files magenta)
+        source_dir: The app's git checkout. `version show` reports its
+                    commit and local changes, and fetches its upstream to
+                    say whether updates are available.
         setup: callable(runtime) -> state, run once when the runtime is
                created (shell or one-shot); the result is `rt.state`. Where
                an app opens its database or builds its managers, reading
@@ -68,7 +71,8 @@ class App:
                  oneshot: bool = True,
                  parser_class=ShellkitParser,
                  file_style: Optional[Callable[[Path], Optional[str]]] = None,
-                 setup: Optional[Callable] = None):
+                 setup: Optional[Callable] = None,
+                 source_dir=None):
         self.name = name
         self.version = version
         self.description = description
@@ -85,6 +89,7 @@ class App:
         self.parser_class = parser_class
         self.file_style = file_style
         self.setup = setup
+        self.source_dir = Path(source_dir).expanduser() if source_dir else None
         self._launch_options: List[tuple] = []
 
         self.settings: List[Setting] = [
