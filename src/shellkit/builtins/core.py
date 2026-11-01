@@ -1,5 +1,6 @@
 """
-Core builtins: exit, help, clear, history, alias, unalias, use, unuse, set.
+Core builtins: exit, help, clear, history, alias, unalias, use, unuse, set,
+version.
 """
 
 import re
@@ -8,7 +9,7 @@ from rich import box
 from rich.markup import escape
 from rich.table import Table
 
-from shellkit.builtins import Builtin
+from shellkit.builtins import Builtin, version
 from shellkit.completion import context_values
 
 
@@ -38,6 +39,7 @@ def builtins():
                 complete=_complete_unuse, category='Context', own_help=True),
         Builtin('set', _set, help='Show or change program settings',
                 usage='set [name [value]]', complete=_complete_set),
+        *version.builtins(),
     ]
 
 
