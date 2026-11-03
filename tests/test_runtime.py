@@ -196,3 +196,21 @@ def test_command_error_reports_without_traceback(tmp_path, workdir):
     status, _, err = h.run('refuse')
     assert status == 2
     assert 'Error: pass a key or --all' in err and 'Traceback' not in err
+
+
+def test_time_left_is_none_outside_a_timed_shell(tmp_path, workdir):
+    from tests.conftest import Harness, make_app
+    h = Harness(make_app(tmp_path))
+    assert h.rt.time_left() is None
+
+
+def test_time_left_counts_down_in_a_timed_shell(tmp_path, workdir):
+    from shellkit.shell import InteractiveShell
+    from tests.conftest import Harness, make_app
+    h = Harness(make_app(tmp_path, session_timeout=15))
+    shell = InteractiveShell(h.rt)
+    try:
+        assert h.rt.shell is shell
+        assert 15 * 60 - 5 < h.rt.time_left() <= 15 * 60
+    finally:
+        shell._clear_alarm()

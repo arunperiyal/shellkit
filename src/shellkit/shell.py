@@ -11,7 +11,7 @@ import signal
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Optional, List
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
@@ -104,6 +104,12 @@ class InteractiveShell:
         if hours:
             return f"{hours}:{minutes:02d}:{seconds:02d}"
         return f"{minutes:02d}:{seconds:02d}"
+
+    def seconds_left(self) -> Optional[float]:
+        """Seconds until the session timeout, or None without one."""
+        if not self._timeout_enabled:
+            return None
+        return max(0.0, self._deadline - time.monotonic())
 
     def _expired(self) -> bool:
         return self._timeout_enabled and time.monotonic() >= self._deadline

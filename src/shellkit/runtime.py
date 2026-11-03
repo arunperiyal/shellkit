@@ -110,6 +110,15 @@ class Runtime:
     def warn(self, message: str) -> None:
         self.err_console.print(f"[yellow]{message}[/yellow]")
 
+    def time_left(self) -> Optional[float]:
+        """
+        Seconds until the session timeout ends the shell, or None when there
+        is none: no timeout set, or not in the interactive shell (a one-shot
+        command runs as long as it takes). For a command to judge whether a
+        long job will finish in this session.
+        """
+        return self.shell.seconds_left() if self.shell is not None else None
+
     def confirm(self, question: str) -> bool:
         """Ask a y/N question. Anything but 'y' (including Ctrl+C) is no."""
         try:
