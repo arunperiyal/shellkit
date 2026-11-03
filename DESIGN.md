@@ -118,6 +118,9 @@ returns its code; the shell keeps running in every case.
 Kept from flexflow (SIGALRM + deadline, ttl shown in the prompt), with one
 change: it only interrupts the shell while it waits at the prompt. A command
 that is running when the time is up finishes first, then the shell exits.
+`rt.time_left()` gives the seconds remaining (None without a timeout, or in
+a one-shot command), so a command can tell whether a long job will finish
+in this session.
 
 ## What stays where
 
