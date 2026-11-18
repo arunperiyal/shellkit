@@ -36,7 +36,7 @@ def show_overview(rt) -> None:
         console.print(table)
 
     console.print("[dim]`help <command>` or `<command> --help` for details. "
-                  "Chain with `;`, pipe with `|`, run an OS command with `!cmd`.[/dim]")
+                  "Chain with `;`, pipe with `|` (a command that offers rows runs the next command once per row), run an OS command with `!cmd`.[/dim]")
     console.print()
 
 

@@ -145,6 +145,11 @@ class ContextStore:
         self._values[name] = ContextValue(raw, value)
         return value
 
+    def restore(self, before: Dict[str, 'ContextValue']) -> None:
+        """Put the context back as `snapshot()` found it (no history entry)."""
+        self._values.clear()
+        self._values.update(before)
+
     def clear(self, name: str) -> bool:
         """Clear one context. Returns False if it was not set."""
         if name not in self.keys:
