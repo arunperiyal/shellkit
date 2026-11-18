@@ -20,7 +20,7 @@ import sys
 import traceback
 from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from rich.console import Console
 from rich.markup import escape
@@ -86,6 +86,7 @@ class Runtime:
         self.shell = None           # the InteractiveShell, when there is one
         self.last_status = 0
         self._capture_depth = 0
+        self._rows: Optional[List[Dict[str, str]]] = None
 
         self.parser = app.build_parser()
         self.builtins = app.builtin_table()
@@ -98,6 +99,15 @@ class Runtime:
     def get(self, key: str, default=None):
         """The value of context `key`, or `default` if it is not set."""
         return self.context.get(key, default)
+
+    def emit(self, rows) -> None:
+        """
+        Offer rows to the command after a `|`: each is {context key: value} for
+        one run of it (`{'case': '/x/C1', 'time': 5400}`). Only a command that
+        is piped into another command sees them; read as text, the command's
+        output is what it always was.
+        """
+        self._rows = [{str(k): str(v) for k, v in row.items()} for row in rows]
 
     def out(self, text: str, end: str = '\n') -> None:
         """Write plain text: no markup, no highlighting, captured in pipes."""
@@ -234,10 +244,19 @@ class Runtime:
 
         output: Optional[str] = None
         status = 0
+        rows: Optional[List[Dict[str, str]]] = None
         for i, segment in enumerate(segments):
             if i == 0 and self._is_internal(segment):
+                self._rows = None
                 output = self.run_captured(segment)
-                status = self.last_status
+                status, rows, self._rows = self.last_status, self._rows, None
+            elif rows is not None and self._is_internal(segment):
+                # the command before offered rows: run this one once for each
+                if output:
+                    self.console.out(output, end='', highlight=False)
+                output = None
+                status = self._run_per_row(segment, rows)
+                rows = None
             else:
                 output, status = self._run_external_captured(segment, output)
                 if status > 1:
@@ -247,6 +266,33 @@ class Runtime:
         if output:
             self.console.out(output, end='', highlight=False)
         return status
+
+    def _run_per_row(self, segment: str, rows: List[Dict[str, str]]) -> int:
+        """Run `segment` once per row, the row's keys set as context for that run and
+        put back after. One row failing is said and the rest still run; the status is
+        the worst one."""
+        if not rows:
+            self.warn("nothing to pass on: the command before the | gave no rows")
+            return 1
+        worst = 0
+        for n, row in enumerate(rows, 1):
+            before = self.context.snapshot()
+            shown = ' '.join(f"{k}:{Path(v).name if k == 'case' else v}" for k, v in row.items())
+            self.console.print(f"[dim]── {n}/{len(rows)}  {escape(shown)}[/dim]")
+            try:
+                for key, value in row.items():
+                    self.context.set(key, value, self)
+            except ContextError as e:
+                self.error(escape(str(e)))
+                worst = max(worst, 2)
+                self.context.restore(before)
+                continue
+            try:
+                status = self.execute_segment(segment)
+            finally:
+                self.context.restore(before)
+            worst = max(worst, status)
+        return worst
 
     def execute_segment(self, line: str) -> int:
         """Run one command: no `;`, no `|`."""

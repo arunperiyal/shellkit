@@ -103,13 +103,27 @@ input -> alias expansion (chained aliases; self-reference stops)
       -> split on unquoted ';'
       -> each part: split on unquoted '|'
            first segment: builtin / command (output captured) or OS
-           later segments: OS shell, previous output on stdin
+           later segments: OS shell, previous output on stdin;
+                           but a command after one that offered rows
+                           (rt.emit) runs once per row, see below
       -> '!cmd' runs cmd in the OS shell directly
 ```
 
 Capture swaps the rich console's file and redirects stdout, so commands that
 use plain `print()` pipe too; rich writes no ANSI to a non-terminal, and any
 ANSI a command writes itself is stripped. Errors go to stderr and are not piped.
+
+Rows. A command may call `rt.emit([{context key: value}, ...])`. When it is
+the first segment of a pipe and the next segment is a builtin or command, that
+segment runs once per row, the row's keys set as context for that run (through
+`ContextStore.set`, so a key's `parse` applies) and put back after, as `use`
+and `unuse` would. The first command's text output is shown as it is; one row
+failing (a value its key rejects, a command that returns non-zero) is said and
+the rest still run; the status is the worst; no rows is "nothing to pass on",
+status 1. Nothing changes for a command that does not emit, or a pipe into an
+OS command: `data stats | grep x` still reads text. Because the row is context,
+the second command needs no change: whatever it takes from `use` it takes from
+the pipe.
 
 Errors: argparse errors show the failing subparser's usage and return 2;
 exceptions return 1 (traceback with `set debug on` or `--debug`); SystemExit
