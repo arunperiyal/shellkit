@@ -85,7 +85,8 @@ sys.exit(app.run())          # no args -> shell; args -> run once and exit
    origin's default branch) and lists the commits and newer tags it has.
    Nothing is installed. `version comment <text>` saves a note stamped with
    the version, commit, time, cwd, context and last command to
-   `comments.json`; `version comment` lists them, `--remove N` drops one.
+   `comments.json`; `version comment` lists them, `--remove N` drops one, `version comment
+   clear` drops all of them (asks first unless `--yes`) and `clear 2 4` those numbers.
 8. **Apps add builtins** with `@app.builtin('web', help=...)`, so things like
    flexflow's `web`, `quota`, `du`, `find` stay in flexflow.
 9. **Storage** is per app: `~/.name` by default, or a relative path to keep it

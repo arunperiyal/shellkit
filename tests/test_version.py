@@ -129,3 +129,59 @@ def test_a_branch_without_upstream_compares_with_the_remote_default(tmp_path, wo
 def test_help_shows_the_brackets(tmp_path, workdir):
     _, out, _ = harness(tmp_path).run('version --help')
     assert 'version [show] [--offline]' in out
+
+
+def _three_comments(h):
+    for text in ('one', 'two', 'three'):
+        h.run(f'version comment {text}')
+
+
+def _saved(tmp_path):
+    return [c['text'] for c in json.loads((tmp_path / 'store' / 'comments.json').read_text())]
+
+
+def test_clear_asks_first_and_clears_every_comment(tmp_path, workdir, monkeypatch):
+    h = harness(tmp_path)
+    _three_comments(h)
+    monkeypatch.setattr(h.rt, 'confirm', lambda question: False)
+    status, out, _ = h.run('version comment clear')
+    assert status == 1 and 'Nothing cleared' in out and len(_saved(tmp_path)) == 3
+
+    asked = []
+    monkeypatch.setattr(h.rt, 'confirm', lambda question: asked.append(question) or True)
+    status, out, _ = h.run('version comment clear')
+    assert status == 0 and 'Cleared 3 comment(s)' in out and _saved(tmp_path) == []
+    assert asked == ['Clear all 3 comment(s)?']
+
+
+def test_clear_yes_does_not_ask(tmp_path, workdir, monkeypatch):
+    h = harness(tmp_path)
+    _three_comments(h)
+    monkeypatch.setattr(h.rt, 'confirm', lambda question: pytest.fail('asked'))
+    status, out, _ = h.run('version comment clear --yes')
+    assert status == 0 and 'Cleared 3 comment(s)' in out and _saved(tmp_path) == []
+
+
+def test_clear_with_numbers_clears_those_and_names_a_missing_one(tmp_path, workdir):
+    h = harness(tmp_path)
+    _three_comments(h)
+    status, out, _ = h.run('version comment clear 1 3')
+    assert status == 0 and 'Removed 2 comment(s)' in out and _saved(tmp_path) == ['two']
+    status, _, err = h.run('version comment clear 2 9')
+    assert status == 1 and 'no comment 9' in err and _saved(tmp_path) == []
+
+
+def test_clear_with_nothing_saved_and_with_a_bad_argument(tmp_path, workdir):
+    h = harness(tmp_path)
+    status, out, _ = h.run('version comment clear')
+    assert status == 0 and 'No comments to clear' in out
+    status, _, err = h.run('version comment clear two')
+    assert status == 2 and 'usage: version comment clear' in err
+
+
+def test_clear_is_offered_by_completion(tmp_path, workdir):
+    from shellkit.builtins.version import _complete
+    h = harness(tmp_path)
+    _three_comments(h)
+    assert 'clear' in [name for name, _ in _complete(h.rt, ['comment'], '')]
+    assert [n for n, _ in _complete(h.rt, ['comment', 'clear'], '')] == ['1', '2', '3']

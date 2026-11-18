@@ -6,6 +6,7 @@ and comments the user leaves for later.
     version comment <text>         note something (a bug, a feature to add)
     version comment                list the notes
     version comment --remove N ..  drop notes once dealt with
+    version comment clear [N ..]   clear every note (asks first), or those numbered
 
 Updates are looked for in the app's git checkout (App(source_dir=...)): its
 upstream is fetched and the commits and tags it has beyond HEAD are listed.
@@ -36,7 +37,7 @@ SHOWN_COMMITS = 10          # new upstream commits listed by `version show`
 
 def builtins():
     return [Builtin('version', _version, help='Show the version and updates; leave comments',
-                    usage='version [show [--offline]] | version comment [text | --remove N ...]',
+                    usage='version [show [--offline]] | version comment [text | --remove N ... | clear [N ...] [--yes]]',
                     complete=_complete, own_help=True)]
 
 
@@ -200,6 +201,8 @@ def _comment(rt, argv) -> int:
         return _list(rt)
     if argv[0] == '--remove':
         return _remove(rt, argv[1:])
+    if argv[0] == 'clear':
+        return _clear(rt, argv[1:])
     if argv[0].startswith('--'):
         rt.error(f"version comment: unknown option '{escape(argv[0])}' (--list, --remove N)")
         return 2
@@ -259,6 +262,28 @@ def _remove(rt, argv) -> int:
     return 1 if missing else 0
 
 
+def _clear(rt, argv) -> int:
+    """`clear` drops every comment after asking (not asked with --yes); `clear 2 4`
+    drops those numbers, like --remove, and says so for one that is not there."""
+    yes = '--yes' in argv or '-y' in argv
+    numbers = [a for a in argv if a not in ('--yes', '-y')]
+    if not all(a.isdigit() for a in numbers):
+        rt.error("usage: version comment clear [N ...] [--yes]")
+        return 2
+    if numbers:
+        return _remove(rt, numbers)
+    comments = load_comments(rt)
+    if not comments:
+        rt.console.print("[dim]No comments to clear.[/dim]")
+        return 0
+    if not yes and not rt.confirm(f"Clear all {len(comments)} comment(s)?"):
+        rt.console.print("Nothing cleared.")
+        return 1
+    _save(rt, [])
+    rt.console.print(f"[green]✓[/green] Cleared {len(comments)} comment(s)")
+    return 0
+
+
 def _comments_line(rt) -> None:
     count = len(load_comments(rt))
     if count:
@@ -277,6 +302,8 @@ def _help(rt):
     p("  version comment <text>        [dim]# note a bug or a feature wanted[/dim]")
     p("  version comment               [dim]# list the notes[/dim]")
     p("  version comment --remove N    [dim]# drop note N once dealt with[/dim]")
+    p("  version comment clear         [dim]# drop every note; asks first, --yes does not[/dim]")
+    p("  version comment clear 2 4     [dim]# drop notes 2 and 4 (a number not there is said)[/dim]")
     p()
     p("[dim]show fetches the upstream of the app's git checkout and lists the commits "
       "and tags it has that this copy does not; --offline uses the last fetch. "
@@ -292,7 +319,8 @@ def _complete(rt, args, current):
     if args[0] == 'show' and len(args) == 1:
         return [('--offline', 'Do not fetch; use the last fetch')]
     if args[0] == 'comment' and len(args) == 1:
-        return [('--remove', 'Remove comments by number')]
-    if args[0] == 'comment' and args[1:2] == ['--remove']:
+        return [('--remove', 'Remove comments by number'),
+                ('clear', 'Clear every comment, or those numbered')]
+    if args[0] == 'comment' and args[1:2] in (['--remove'], ['clear']):
         return [(str(c['id']), c.get('text', '')) for c in load_comments(rt)]
     return []
