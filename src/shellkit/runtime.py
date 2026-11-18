@@ -102,12 +102,14 @@ class Runtime:
 
     def emit(self, rows) -> None:
         """
-        Offer rows to the command after a `|`: each is {context key: value} for
+        Offer rows to the command after a `|` (calls add up, so a command that
+        works on several cases emits as it goes): each is {context key: value} for
         one run of it (`{'case': '/x/C1', 'time': 5400}`). Only a command that
         is piped into another command sees them; read as text, the command's
         output is what it always was.
         """
-        self._rows = [{str(k): str(v) for k, v in row.items()} for row in rows]
+        self._rows = (self._rows or []) + [{str(k): str(v) for k, v in row.items()}
+                                           for row in rows]
 
     def out(self, text: str, end: str = '\n') -> None:
         """Write plain text: no markup, no highlighting, captured in pipes."""

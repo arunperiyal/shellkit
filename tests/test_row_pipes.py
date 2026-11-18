@@ -96,3 +96,9 @@ def test_rows_do_not_leak_into_the_next_line(sh):
     sh.run('rows C1 10')
     status, out, _ = sh.run('rows C1 10 | see')
     assert out.count('see time=') == 1
+
+
+def test_emit_calls_add_up(sh):
+    sh.rt.emit([{'time': '1'}])
+    sh.rt.emit([{'time': '2'}])
+    assert sh.rt._rows == [{'time': '1'}, {'time': '2'}]
