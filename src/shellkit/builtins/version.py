@@ -189,8 +189,9 @@ def _save(rt, comments) -> None:
 
 def _last_command(rt) -> Optional[str]:
     """The last command run before this one, from the history file."""
-    from shellkit.shell import read_history
+    from shellkit.shell import join_continuations, read_history
     for entry in read_history(rt.storage.path(rt.storage.HISTORY)):
+        entry = join_continuations(entry)
         if not entry.split()[:1] == ['version']:
             return entry.replace('\n', ' ; ')
     return None

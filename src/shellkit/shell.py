@@ -2,7 +2,8 @@
 Interactive shell: the prompt loop around a Runtime.
 
 History (deduplicated), completion, a two-line prompt showing the directory
-and the context, and an optional session timeout that ends an idle shell.
+and the context, an optional session timeout that ends an idle shell, and
+lines that continue: one ending in `\\` goes on at the next line, as in bash.
 """
 
 import html
@@ -14,8 +15,11 @@ from pathlib import Path
 from typing import Optional, List
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.application import get_app
+from prompt_toolkit.filters import Condition
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 
 from shellkit.completion import ShellkitCompleter
@@ -30,6 +34,40 @@ DEFAULT_STYLES = {
     'timeout': '#ff6666 bold',
     'ctx': '#00aaff',
 }
+
+
+CONTINUATION_MARK = '…'
+
+
+def continues(text: str) -> bool:
+    """True when the text ends in a backslash that is not itself escaped (an odd
+    number of them), so the command goes on at the next line."""
+    return (len(text) - len(text.rstrip('\\'))) % 2 == 1
+
+
+def join_continuations(text: str) -> str:
+    """The command as one line: each `\\` that ends a line is dropped with its newline."""
+    lines = text.split('\n')
+    out = lines[0]
+    for line in lines[1:]:
+        out = (out[:-1] if continues(out) else out + '\n') + line
+    return out
+
+
+def continuation_bindings() -> KeyBindings:
+    """Enter after a line ending in `\\` starts the next line instead of running."""
+    kb = KeyBindings()
+
+    @kb.add('enter', filter=Condition(lambda: continues(get_app().current_buffer.text)))
+    def _(event):
+        event.current_buffer.insert_text('\n')
+
+    return kb
+
+
+def continuation_prompt(width, line_number, wrap_count):
+    """The mark in front of a continued line, right-aligned under the prompt."""
+    return (CONTINUATION_MARK + ' ').rjust(width)
 
 
 class SessionTimeout(BaseException):
@@ -81,6 +119,8 @@ class InteractiveShell:
             style=Style.from_dict(styles),
             enable_history_search=True,
             complete_while_typing=True,
+            key_bindings=continuation_bindings(),
+            prompt_continuation=continuation_prompt,
         )
 
     def prompt_message(self):
@@ -163,10 +203,10 @@ class InteractiveShell:
                 try:
                     self._at_prompt = True
                     try:
-                        line = self.session.prompt(
+                        line = join_continuations(self.session.prompt(
                             self.prompt_message(),
                             refresh_interval=0.5 if self._timeout_enabled else None,
-                        ).strip()
+                        )).strip()
                     finally:
                         self._at_prompt = False
                     if line:

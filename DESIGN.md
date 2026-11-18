@@ -20,6 +20,7 @@ src/shellkit/
   context.py      ContextKey, ContextStore, add_context_arg, fill_context
   runtime.py      Runtime: session state + line execution (; | ! aliases)
   shell.py        InteractiveShell: prompt loop, history, prompt, timeout
+                  (a line ending in `\` continues on the next, as in bash)
   completion.py   completer generated from the argparse tree
   help.py         `help` built from the registry and builtins
   settings.py     Setting / Settings behind `set`
